@@ -32,9 +32,31 @@ include/zconf.h
 include/zlib.h
 "
 
-termux_step_post_get_source() {
-	pushd toolchains/llvm/prebuilt/linux-x86_64/sysroot/
-	for patch in $TERMUX_SCRIPTDIR/ndk-patches/$TERMUX_PKG_VERSION/*.patch; do
+termux_step_get_source() {
+	if [ "$TERMUX_ON_DEVICE_BUILD" = true ]; then
+		termux_download_src_archive
+		cd $TERMUX_PKG_TMPDIR
+		termux_extract_src_archive
+	fi
+	mkdir -p $TERMUX_PKG_SRCDIR
+}
+
+termux_step_make_install() {
+	mkdir -p $TERMUX_PREFIX/{include,lib}
+
+	local _ndk_prefix
+
+	if [ "$TERMUX_ON_DEVICE_BUILD" = true ]; then
+		_ndk_prefix="$TERMUX_PKG_SRCDIR"
+	else
+		_ndk_prefix="$NDK"
+	fi
+
+	cp -Rf $_ndk_prefix/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/* \
+		$TERMUX_PREFIX/include
+
+	pushd $TERMUX_PREFIX/../
+	for patch in $TERMUX_SCRIPTDIR/ndk-patches/$TERMUX_PKG_VERSION/*.patch $TERMUX_PKG_BUILDER_DIR/math-header.diff; do
 		echo "Applying ndk patch: $(basename $patch)"
 		test -f "$patch" && sed \
 			-e "s%\@TERMUX_APP_PACKAGE\@%${TERMUX_APP_PACKAGE}%g" \
@@ -48,39 +70,30 @@ termux_step_post_get_source() {
 		usr/include/android/api-level.h
 	grep -lrw usr/include/c++/v1 -e '<version>' | xargs -n 1 sed -i 's/<version>/\"version\"/g'
 	popd
-}
 
-termux_step_make_install() {
-	mkdir -p $TERMUX_PKG_MASSAGEDIR/$TERMUX_PREFIX/lib \
-		$TERMUX_PKG_MASSAGEDIR/$TERMUX_PREFIX/include
+	find $TERMUX_PREFIX/include -name \*.orig -delete
 
-	cp -Rf toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/* \
-		$TERMUX_PKG_MASSAGEDIR/$TERMUX_PREFIX/include
+	cp $TERMUX_SCRIPTDIR/ndk-patches/{langinfo,libintl}.h $TERMUX_PREFIX/include/
 
+	cp $_ndk_prefix/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/$TERMUX_HOST_PLATFORM/$TERMUX_PKG_API_LEVEL/*.o \
+		$TERMUX_PREFIX/lib
 
-	find $TERMUX_PKG_MASSAGEDIR/$TERMUX_PREFIX/include -name \*.orig -delete
-
-	cp $TERMUX_SCRIPTDIR/ndk-patches/{langinfo,libintl}.h $TERMUX_PKG_MASSAGEDIR/$TERMUX_PREFIX/include/
-
-	cp toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/$TERMUX_HOST_PLATFORM/$TERMUX_PKG_API_LEVEL/*.o \
-		$TERMUX_PKG_MASSAGEDIR/$TERMUX_PREFIX/lib
-
-	cp toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/$TERMUX_HOST_PLATFORM/libcompiler_rt-extras.a \
-		$TERMUX_PKG_MASSAGEDIR/$TERMUX_PREFIX/lib/
+	cp $_ndk_prefix/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/$TERMUX_HOST_PLATFORM/libcompiler_rt-extras.a \
+		$TERMUX_PREFIX/lib/
 
 	NDK_ARCH=$TERMUX_ARCH
 	test $NDK_ARCH == 'i686' && NDK_ARCH='i386'
 
 	# clang 13 requires libunwind on Android.
-	cp toolchains/llvm/prebuilt/linux-x86_64/lib/clang/17/lib/linux/$NDK_ARCH/libatomic.a \
-		$TERMUX_PKG_MASSAGEDIR/$TERMUX_PREFIX/lib
-	cp toolchains/llvm/prebuilt/linux-x86_64/lib/clang/17/lib/linux/$NDK_ARCH/libunwind.a \
-		$TERMUX_PKG_MASSAGEDIR/$TERMUX_PREFIX/lib
+	cp $_ndk_prefix/toolchains/llvm/prebuilt/linux-x86_64/lib/clang/*/lib/linux/$NDK_ARCH/libatomic.a \
+		$TERMUX_PREFIX/lib
+	cp $_ndk_prefix/toolchains/llvm/prebuilt/linux-x86_64/lib/clang/*/lib/linux/$NDK_ARCH/libunwind.a \
+		$TERMUX_PREFIX/lib
 
 	# librt and libpthread are built into libc on android, so setup them as symlinks
 	# to libc for compatibility with programs that users try to build:
 	for lib in librt.so libpthread.so libutil.so; do
-		echo 'INPUT(-lc)' > $TERMUX_PKG_MASSAGEDIR/$TERMUX_PREFIX/lib/$lib
+		echo 'INPUT(-lc)' > $TERMUX_PREFIX/lib/$lib
 	done
 	unset lib
 }
