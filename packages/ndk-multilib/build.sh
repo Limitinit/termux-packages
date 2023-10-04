@@ -11,55 +11,71 @@ TERMUX_PKG_PLATFORM_INDEPENDENT=true
 TERMUX_PKG_NO_STATICSPLIT=true
 TERMUX_PKG_BUILD_IN_SRC=true
 
+termux_step_get_source() {
+	if [ "$TERMUX_ON_DEVICE_BUILD" = true ]; then
+		termux_download_src_archive
+		cd $TERMUX_PKG_TMPDIR
+		termux_extract_src_archive
+	fi
+	mkdir -p $TERMUX_PKG_SRCDIR
+}
+
 prepare_libs() {
 	local ARCH="$1"
 	local SUFFIX="$2"
-	local NDK_SUFFIX=$SUFFIX
 
-	if [ $ARCH = x86 ] || [ $ARCH = x86_64 ]; then
-	    NDK_SUFFIX=$ARCH
+	local _ndk_prefix
+
+	if [ "$TERMUX_ON_DEVICE_BUILD" = true ]; then
+		_ndk_prefix="$TERMUX_PKG_SRCDIR"
+	else
+		_ndk_prefix="$NDK"
 	fi
 
-	mkdir -p $TERMUX_PKG_MASSAGEDIR/$TERMUX_PREFIX/$SUFFIX/lib
-	mkdir -p $TERMUX_PKG_MASSAGEDIR/$TERMUX_PREFIX/opt/ndk-multilib/$SUFFIX/lib
-	local BASEDIR=toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/$SUFFIX/
-	cp $BASEDIR/${TERMUX_PKG_API_LEVEL}/*.o $TERMUX_PKG_MASSAGEDIR/$TERMUX_PREFIX/$SUFFIX/lib
-	cp $BASEDIR/${TERMUX_PKG_API_LEVEL}/lib{c,dl,log,m}.so $TERMUX_PKG_MASSAGEDIR/$TERMUX_PREFIX/opt/ndk-multilib/$SUFFIX/lib
-	cp $BASEDIR/libc++_shared.so $TERMUX_PKG_MASSAGEDIR/$TERMUX_PREFIX/$SUFFIX/lib
-	cp $BASEDIR/lib{c,dl,m}.a $TERMUX_PKG_MASSAGEDIR/$TERMUX_PREFIX/opt/ndk-multilib/$SUFFIX/lib
-	cp $BASEDIR/lib{c++_static,c++abi}.a $TERMUX_PKG_MASSAGEDIR/$TERMUX_PREFIX/$SUFFIX/lib
-	echo 'INPUT(-lc++_static -lc++abi)' > $TERMUX_PKG_MASSAGEDIR/$TERMUX_PREFIX/$SUFFIX/lib/libc++_shared.a
+	mkdir -p $TERMUX_PREFIX/$SUFFIX/lib
+	mkdir -p $TERMUX_PREFIX/opt/ndk-multilib/$SUFFIX/lib
+	local BASEDIR=$_ndk_prefix/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/$SUFFIX/
+	cp $BASEDIR/${TERMUX_PKG_API_LEVEL}/*.o $TERMUX_PREFIX/$SUFFIX/lib
+	cp $BASEDIR/${TERMUX_PKG_API_LEVEL}/lib{c,dl,log,m}.so $TERMUX_PREFIX/opt/ndk-multilib/$SUFFIX/lib
+	cp $BASEDIR/libc++_shared.so $TERMUX_PREFIX/$SUFFIX/lib
+	cp $BASEDIR/lib{c,dl,m}.a $TERMUX_PREFIX/opt/ndk-multilib/$SUFFIX/lib
+	cp $BASEDIR/lib{c++_static,c++abi}.a $TERMUX_PREFIX/$SUFFIX/lib
+	echo 'INPUT(-lc++_static -lc++abi)' > $TERMUX_PREFIX/$SUFFIX/lib/libc++_shared.a
 
 	local f
 	for f in lib{c,dl,log,m}.so lib{c,dl,m}.a; do
 		ln -sfT $TERMUX_PREFIX/opt/ndk-multilib/$SUFFIX/lib/${f} \
-			$TERMUX_PKG_MASSAGEDIR/$TERMUX_PREFIX/$SUFFIX/lib/${f}
+			$TERMUX_PREFIX/$SUFFIX/lib/${f}
 	done
 
-	if [ $ARCH == "x86" ]; then
-		LIBATOMIC=toolchains/llvm/prebuilt/linux-x86_64/lib/clang/*/lib/linux/i386
-	elif [ $ARCH == "arm64" ]; then
-		LIBATOMIC=toolchains/llvm/prebuilt/linux-x86_64/lib/clang/*/lib/linux/aarch64
-	else
-		LIBATOMIC=toolchains/llvm/prebuilt/linux-x86_64/lib/clang/*/lib/linux/$ARCH
-	fi
+	NDK_ARCH=$TERMUX_ARCH
+	test $NDK_ARCH == 'i686' && NDK_ARCH='i386'
 
-	cp $LIBATOMIC/libatomic.a $TERMUX_PKG_MASSAGEDIR/$TERMUX_PREFIX/$SUFFIX/lib/
-
-	cp $LIBATOMIC/libunwind.a $TERMUX_PKG_MASSAGEDIR/$TERMUX_PREFIX/$SUFFIX/lib/
+	cp $_ndk_prefix/toolchains/llvm/prebuilt/linux-x86_64/lib/clang/*/lib/linux/$NDK_ARCH/libatomic.a \
+		$TERMUX_PREFIX/$SUFFIX/lib/
+	cp $_ndk_prefix/toolchains/llvm/prebuilt/linux-x86_64/lib/clang/*/lib/linux/$NDK_ARCH/libunwind.a \
+		$TERMUX_PREFIX/$SUFFIX/lib/
 }
 
 add_cross_compiler_rt() {
-	RT_PREFIX=toolchains/llvm/prebuilt/linux-x86_64/lib/clang/*/lib/linux
+	local _ndk_prefix
+
+	if [ "$TERMUX_ON_DEVICE_BUILD" = true ]; then
+		_ndk_prefix="$TERMUX_PKG_SRCDIR"
+	else
+		_ndk_prefix="$NDK"
+	fi
+
+	RT_PREFIX=$_ndk_prefix/toolchains/llvm/prebuilt/linux-x86_64/lib/clang/*/lib/linux
 	RT_OPT_DIR=$TERMUX_PREFIX/opt/ndk-multilib/cross-compiler-rt
-	mkdir -p $TERMUX_PKG_MASSAGEDIR/$RT_OPT_DIR
-	cp $RT_PREFIX/* $TERMUX_PKG_MASSAGEDIR/$RT_OPT_DIR || true
+	mkdir -p $RT_OPT_DIR
+	cp $RT_PREFIX/* $RT_OPT_DIR || true
 }
 
 termux_step_make_install() {
 	prepare_libs "arm" "arm-linux-androideabi"
-	prepare_libs "arm64" "aarch64-linux-android"
-	prepare_libs "x86" "i686-linux-android"
+	prepare_libs "aarch64" "aarch64-linux-android"
+	prepare_libs "i686" "i686-linux-android"
 	prepare_libs "x86_64" "x86_64-linux-android"
 	add_cross_compiler_rt
 }
@@ -86,4 +102,3 @@ termux_step_create_debscripts() {
 		$TERMUX_PKG_BUILDER_DIR/postinst-alien.in >> prerm
 	chmod 0700 postinst prerm
 }
-
