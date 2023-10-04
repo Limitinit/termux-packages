@@ -16,7 +16,24 @@ TERMUX_PKG_BUILD_IN_SRC=true
 # https://android.googlesource.com/platform/frameworks/native/+/master/vulkan
 # https://android.googlesource.com/platform/frameworks/native/+/master/vulkan/libvulkan/libvulkan.map.txt
 
+termux_step_get_source() {
+	if [ "$TERMUX_ON_DEVICE_BUILD" = true ]; then
+		termux_download_src_archive
+		cd $TERMUX_PKG_TMPDIR
+		termux_extract_src_archive
+	fi
+	mkdir -p $TERMUX_PKG_SRCDIR
+}
+
 termux_step_host_build() {
+	local _ndk_prefix
+
+	if [ "$TERMUX_ON_DEVICE_BUILD" = true ]; then
+		_ndk_prefix="$TERMUX_PKG_SRCDIR"
+	else
+		_ndk_prefix="$NDK"
+	fi
+
 	# Use NDK provided vulkan header version
 	# instead of vulkan-loader-generic vulkan.pc
 	# https://github.com/android/ndk/issues/1721
@@ -32,13 +49,21 @@ termux_step_host_build() {
 	}
 	EOF
 	rm -fr ./vulkan
-	cp -fr "${TERMUX_PKG_SRCDIR}/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/vulkan" ./vulkan
+	cp -fr "$_ndk_prefix/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/vulkan" ./vulkan
 	cc vulkan_header_version.c -o vulkan_header_version
 }
 
 termux_step_post_make_install() {
+	local _ndk_prefix
+
+	if [ "$TERMUX_ON_DEVICE_BUILD" = true ]; then
+		_ndk_prefix="$TERMUX_PKG_SRCDIR"
+	else
+		_ndk_prefix="$NDK"
+	fi
+
 	install -v -Dm644 \
-		"toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/${TERMUX_HOST_PLATFORM}/${TERMUX_PKG_API_LEVEL}/libvulkan.so" \
+		"$_ndk_prefix/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/${TERMUX_HOST_PLATFORM}/${TERMUX_PKG_API_LEVEL}/libvulkan.so" \
 		"${TERMUX_PREFIX}/lib/libvulkan.so"
 
 	local vulkan_loader_version
