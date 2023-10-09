@@ -10,7 +10,7 @@ FROM ubuntu:22.04
 ENV LANG en_US.UTF-8
 
 # Needed for setup:
-COPY ./setup-ubuntu.sh ./setup-android-sdk.sh ./setup-cgct.sh ./properties.sh ./openjdk-r-ppa.gpg /tmp/
+COPY ./setup-ubuntu.sh ./setup-android-sdk.sh ./setup-cgct.sh ./properties.sh ./openjdk-r-ppa.gpg ./deadsnakes-ppa.gpg /tmp/
 RUN mkdir /tmp/build
 COPY ./build/termux_download.sh /tmp/build/
 

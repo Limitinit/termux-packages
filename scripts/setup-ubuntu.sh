@@ -66,11 +66,13 @@ PACKAGES+=" xmltoman"
 PACKAGES+=" python3.9"
 PACKAGES+=" python3.10"
 PACKAGES+=" python3.11"
+PACKAGES+=" python3.12"
 PACKAGES+=" python3-pip"
 PACKAGES+=" python3-setuptools"
 PACKAGES+=" python-wheel-common"
 PACKAGES+=" python3.10-venv"
 PACKAGES+=" python3.11-venv"
+PACKAGES+=" python3.12-venv"
 
 # Needed by package bc.
 PACKAGES+=" ed"
@@ -316,14 +318,22 @@ $SUDO cp $(dirname "$(realpath "$0")")/openjdk-r-ppa.gpg /etc/apt/trusted.gpg.d/
 $SUDO chmod a+r /etc/apt/trusted.gpg.d/openjdk-r-ppa.gpg
 echo "deb https://ppa.launchpadcontent.net/openjdk-r/ppa/ubuntu/ jammy main" | $SUDO tee /etc/apt/sources.list.d/openjdk-r-ubuntu-ppa-jammy.list > /dev/null
 $SUDO apt-get -yq update
+# Add ppa repo to be able to get python3.12 on ubuntu 22.04
+$SUDO cp $(dirname "$(realpath "$0")")/deadsnakes-ppa.gpg /etc/apt/trusted.gpg.d/
+$SUDO chmod a+r /etc/apt/trusted.gpg.d/deadsnakes-ppa.gpg
+echo "deb https://ppa.launchpadcontent.net/deadsnakes/ppa/ubuntu jammy main " | $SUDO tee /etc/apt/sources.list.d/deadsnakes-ubuntu-ppa-jammy.list > /dev/null
+$SUDO apt-get -yq update
 
 $SUDO env DEBIAN_FRONTEND=noninteractive \
-	apt-get install -yq --no-install-recommends $PACKAGES
+	apt-get install -yq --no-install-recommends --fix-broken $PACKAGES
 
 # Pip for python2.
 curl -L --output /tmp/py2-get-pip.py https://bootstrap.pypa.io/pip/2.7/get-pip.py
 $SUDO python2 /tmp/py2-get-pip.py
 rm -f /tmp/py2-get-pip.py
+
+# Pip for python3.12
+$SUDO python3.12 -m ensurepip --altinstall
 
 $SUDO locale-gen --purge en_US.UTF-8
 echo -e 'LANG="en_US.UTF-8"\nLANGUAGE="en_US:en"\n' | $SUDO tee -a /etc/default/locale
