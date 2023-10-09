@@ -53,22 +53,9 @@ lib/python${_MAJOR_VERSION}/*/tests
 lib/python${_MAJOR_VERSION}/site-packages/*/
 "
 
-TERMUX_PKG_HOSTBUILD=true
-TERMUX_PKG_EXTRA_HOSTBUILD_CONFIGURE_ARGS="
---prefix=$TERMUX_PREFIX/opt/python$_MAJOR_VERSION/cross
-"
-
-termux_step_host_build() {
-	$TERMUX_PKG_SRCDIR/configure $TERMUX_PKG_EXTRA_HOSTBUILD_CONFIGURE_ARGS
-	make -j $TERMUX_MAKE_PROCESSES
-	make altinstall
-}
-
 termux_step_pre_configure() {
 	# Remove this marker all the time, because python-cross needs to be installed every time
 	rm -rf $TERMUX_HOSTBUILD_MARKER
-
-	export PATH="$TERMUX_PREFIX/opt/python$_MAJOR_VERSION/cross/bin:$PATH"
 
 	# -O3 gains some additional performance on at least aarch64.
 	CFLAGS="${CFLAGS/-Oz/-O3}"
